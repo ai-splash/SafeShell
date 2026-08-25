@@ -93,6 +93,7 @@ Predefined scenarios provide repeatable results without requiring an external LL
 ---
 
 # Architecture
+![SafeShell Architecture](docs/architecture.png)
 
 ```text
                          SafeShell Frontend
