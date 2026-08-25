@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SafeShell — Transactional Linux Command Safety Framework</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #090c11;
+  --bg-grid: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.035) 1px, transparent 0);
+  --surface: #11161e;
+  --surface-2: #171e28;
+  --surface-hover: #1c2531;
+  --border: #232b38;
+  --border-soft: #1a212b;
+  --text: #e8ecf3;
+  --text-dim: #8b96a8;
+  --text-faint: #5b6577;
+  --amber: #f5a623;
+  --cyan: #22d3ee;
+  --violet: #a78bfa;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --blocked: #dc2626;
+  --risk-safe: #22d3ee;
+  --risk-low: #34d399;
+  --risk-medium: #fbbf24;
+  --risk-high: #f87171;
+  --risk-critical: #dc2626;
+  --risk-blocked: #dc2626;
+  --font-display: "JetBrains Mono", ui-monospace, monospace;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --shadow-card: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px rgba(0,0,0,0.28);
+}
+* { box-sizing: border-box; }
+html { color-scheme: dark; }
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--bg-grid), linear-gradient(180deg, #0b0f16 0%, #090c11 400px);
+  background-size: 22px 22px, auto;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: rgba(34, 211, 238, 0.25); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a3341; border-radius: 8px; }
+button { font-family: var(--font-body); cursor: pointer; }
+code { font-family: var(--font-display); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 5px; font-size: 0.85em; }
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.hidden { display: none !important; }
+
+.shell { max-width: 1360px; margin: 0 auto; padding: 18px 22px 48px; }
+
+/* ---------- Header ---------- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  padding: 14px 4px 20px; border-bottom: 1px solid var(--border-soft); margin-bottom: 22px;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-glyph {
+  font-family: var(--font-display); font-weight: 800; font-size: 1.3rem; color: var(--cyan);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 6px 10px; text-shadow: 0 0 14px rgba(34,211,238,0.45);
+}
+.brand-text { display: flex; flex-direction: column; line-height: 1.25; }
+.brand-name { font-family: var(--font-display); font-weight: 800; font-size: 1.28rem; letter-spacing: 0.01em; }
+.brand-sub { font-size: 0.78rem; color: var(--text-dim); letter-spacing: 0.02em; }
+.topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.nav-link { font-size: 0.78rem; color: var(--text-dim); border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px; }
+.nav-link:hover { color: var(--cyan); border-color: var(--cyan); text-decoration: none; }
+
+.status-pill {
+  display: flex; align-items: center; gap: 7px; background: var(--surface-2);
+  border: 1px solid var(--border); color: var(--text-dim); font-size: 0.75rem; font-weight: 700;
+  padding: 7px 13px; border-radius: 999px; letter-spacing: 0.03em;
+}
+.status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); }
+.status-pill.ok { color: var(--ok); border-color: rgba(52,211,153,0.35); }
+.status-pill.ok .dot { background: var(--ok); box-shadow: 0 0 8px rgba(52,211,153,0.7); }
+.status-pill.demo { color: var(--amber); border-color: rgba(245,166,35,0.4); }
+.status-pill.demo .dot { background: var(--amber); box-shadow: 0 0 8px rgba(245,166,35,0.7); }
+.status-pill.offline { color: var(--warn); border-color: rgba(251,191,36,0.4); }
+
+/* ---------- Cards / Grid ---------- */
+.grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-card); padding: 18px 20px;
+}
+.span-12 { grid-column: span 12; }
+.span-8 { grid-column: span 8; }
+.span-4 { grid-column: span 4; }
+.span-6 { grid-column: span 6; }
+.span-3 { grid-column: span 3; }
+@media (max-width: 980px) {
+  .span-8, .span-6, .span-4, .span-3 { grid-column: span 12; }
+}
+.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
+.card-head h2 { font-size: 0.95rem; margin: 0; letter-spacing: 0.02em; }
+.card-head h2 .accent { color: var(--cyan); }
+.muted-chip { font-size: 0.7rem; color: var(--text-dim); background: var(--surface-2); border: 1px solid var(--border-soft); padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+
+/* ---------- Console ---------- */
+.console-label { font-family: var(--font-display); font-size: 0.85rem; color: var(--text-dim); margin-bottom: 10px; }
+.console-row { display: flex; gap: 10px; flex-wrap: wrap; }
+#cmd-input {
+  flex: 1; min-width: 240px; background: #0c1017; border: 1px solid var(--border); color: var(--text);
+  font-family: var(--font-display); font-size: 0.95rem; padding: 14px 16px; border-radius: var(--radius-sm);
+  outline: none;
+}
+#cmd-input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(34,211,238,0.12); }
+.btn {
+  font-weight: 700; font-size: 0.82rem; letter-spacing: 0.02em; padding: 12px 18px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text); transition: all .12s ease;
+}
+.btn:hover { background: var(--surface-hover); }
+.btn.primary { background: var(--cyan); color: #06222a; border-color: var(--cyan); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.warn { background: var(--amber); color: #2a1a00; border-color: var(--amber); }
+.btn.danger { background: var(--blocked); color: #fff; border-color: var(--blocked); }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.demo-cta {
+  width: 100%; padding: 15px; font-size: 0.95rem; font-weight: 800; letter-spacing: 0.03em;
+  background: linear-gradient(135deg, var(--cyan), var(--violet)); color: #06131a; border: none; border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px rgba(34,211,238,0.25);
+}
+.demo-cta:hover { filter: brightness(1.06); }
+
+/* ---------- Scenario chips ---------- */
+.scenario-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 14px; }
+.scenario-chip {
+  text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px 14px; color: var(--text); font-size: 0.82rem;
+}
+.scenario-chip:hover { border-color: var(--cyan); background: var(--surface-hover); }
+.scenario-chip.active { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan) inset; }
+.scenario-chip .sc-title { font-weight: 700; margin-bottom: 4px; }
+.scenario-chip .sc-cmd { font-family: var(--font-display); color: var(--text-dim); font-size: 0.74rem; display: block; margin-top: 6px; }
+.risk-tag { display: inline-block; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.05em; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; }
+.risk-tag.low { background: rgba(52,211,153,0.15); color: var(--risk-low); }
+.risk-tag.medium { background: rgba(251,191,36,0.15); color: var(--risk-medium); }
+.risk-tag.high { background: rgba(248,113,113,0.15); color: var(--risk-high); }
+.risk-tag.critical, .risk-tag.blocked { background: rgba(220,38,38,0.2); color: var(--risk-critical); }
+.risk-tag.safe { background: rgba(34,211,238,0.15); color: var(--risk-safe); }
+
+/* ---------- Pipeline timeline ---------- */
+.pipeline { display: flex; flex-direction: column; gap: 0; }
+.pipeline-stage { display: flex; align-items: center; gap: 12px; padding: 7px 0; }
+.pipeline-stage .marker {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 800; color: var(--text-faint);
+  transition: all .2s ease;
+}
+.pipeline-stage .label { font-size: 0.84rem; color: var(--text-faint); font-weight: 600; transition: color .2s ease; }
+.pipeline-stage.done .marker { background: var(--ok); border-color: var(--ok); color: #06231a; }
+.pipeline-stage.done .label { color: var(--text); }
+.pipeline-stage.current .marker { background: var(--amber); border-color: var(--amber); color: #2a1a00; box-shadow: 0 0 0 4px rgba(245,166,35,0.18); }
+.pipeline-stage.current .label { color: var(--amber); }
+.pipeline-stage.blocked .marker { background: var(--blocked); border-color: var(--blocked); color: #fff; }
+.pipeline-stage.blocked .label { color: var(--bad); }
+.pipeline-connector { width: 2px; height: 14px; background: var(--border-soft); margin-left: 10px; }
+.pipeline-connector.done { background: var(--ok); }
+
+/* ---------- Risk / Simulation / Undo panels ---------- */
+.kv-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border-soft); font-size: 0.85rem; }
+.kv-row:last-child { border-bottom: none; }
+.kv-row .k { color: var(--text-dim); }
+.kv-row .v { color: var(--text); font-weight: 600; text-align: right; }
+.big-risk { font-family: var(--font-display); font-size: 1.5rem; font-weight: 800; letter-spacing: 0.02em; margin-bottom: 4px; }
+.big-risk.low { color: var(--risk-low); }
+.big-risk.medium { color: var(--risk-medium); }
+.big-risk.high { color: var(--risk-high); }
+.big-risk.critical, .big-risk.blocked { color: var(--risk-critical); }
+.big-risk.safe { color: var(--risk-safe); }
+.reason-box { font-size: 0.85rem; color: var(--text-dim); line-height: 1.5; margin-top: 6px; }
+.sim-metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 10px 0 14px; }
+.sim-metric { background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 10px 12px; }
+.sim-metric .num { font-family: var(--font-display); font-size: 1.3rem; font-weight: 800; }
+.sim-metric .lbl { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+.check-line { display: flex; align-items: center; gap: 8px; font-size: 0.83rem; padding: 4px 0; color: var(--text-dim); }
+.check-line .tick { color: var(--ok); font-weight: 800; }
+.undo-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.undo-list li { display: flex; gap: 10px; font-size: 0.85rem; padding: 7px 0; border-bottom: 1px solid var(--border-soft); }
+.undo-list li:last-child { border-bottom: none; }
+.undo-list li .step-num { font-family: var(--font-display); color: var(--cyan); font-weight: 800; flex-shrink: 0; }
+.readiness-bar-wrap { margin-top: 12px; }
+.readiness-label { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-dim); margin-bottom: 6px; }
+.readiness-bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.readiness-fill { height: 100%; background: linear-gradient(90deg, var(--ok), var(--cyan)); border-radius: 999px; transition: width .4s ease; }
+
+.banner { border-radius: var(--radius-sm); padding: 12px 14px; font-size: 0.85rem; font-weight: 600; margin-top: 10px; display: flex; gap: 10px; align-items: flex-start; }
+.banner.blocked { background: rgba(220,38,38,0.12); border: 1px solid rgba(220,38,38,0.4); color: #ffb4b4; }
+.banner.ok { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.35); color: #a6f3d6; }
+.banner.info { background: rgba(34,211,238,0.08); border: 1px solid rgba(34,211,238,0.3); color: #b5f1fb; }
+
+/* ---------- Status stat cards ---------- */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.stat-card {
+  background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--radius-sm);
+  padding: 14px; text-align: center; cursor: pointer; user-select: none;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease, background .15s ease;
+}
+.stat-card:hover { border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(34,211,238,0.25), 0 0 18px rgba(34,211,238,0.15); transform: translateY(-2px); background: var(--surface-hover); }
+.stat-card:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.stat-card.active { border-color: var(--cyan); background: var(--surface-hover); box-shadow: 0 0 0 1px var(--cyan) inset, 0 0 18px rgba(34,211,238,0.2); }
+.stat-card .num { font-family: var(--font-display); font-size: 1.6rem; font-weight: 800; color: var(--cyan); }
+.stat-card .lbl { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 4px; }
+.stat-card .stat-hint { font-size: 0.62rem; color: var(--text-faint); margin-top: 6px; letter-spacing: 0.02em; }
+.stat-card.active .stat-hint { color: var(--cyan); }
+@media (max-width: 700px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
+.filter-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filter-chip { background: rgba(34,211,238,0.12); border-color: rgba(34,211,238,0.4); color: var(--cyan); font-weight: 800; }
+.clear-filter-btn { padding: 5px 12px; font-size: 0.7rem; }
+
+/* ---------- Table ---------- */
+table.txn-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+table.txn-table th { text-align: left; color: var(--text-dim); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+table.txn-table td { padding: 10px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
+table.txn-table tr:last-child td { border-bottom: none; }
+.status-chip { font-size: 0.68rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; letter-spacing: 0.03em; text-transform: uppercase; }
+.status-chip.COMMITTED { background: rgba(52,211,153,0.15); color: var(--ok); }
+.status-chip.BLOCKED { background: rgba(220,38,38,0.18); color: var(--bad); }
+.status-chip.ROLLED_BACK { background: rgba(167,139,250,0.18); color: var(--violet); }
+.status-chip.AWAITING_CONFIRMATION { background: rgba(245,166,35,0.15); color: var(--amber); }
+.status-chip.EXECUTING, .status-chip.VERIFYING { background: rgba(34,211,238,0.15); color: var(--cyan); }
+.status-chip.FAILED { background: rgba(220,38,38,0.18); color: var(--bad); }
+
+.ai-conf { font-family: var(--font-display); font-size: 1.1rem; font-weight: 800; color: var(--violet); }
+
+footer.app-footer { display: flex; justify-content: space-between; padding: 20px 4px; color: var(--text-faint); font-size: 0.78rem; flex-wrap: wrap; gap: 8px; }
+.empty-note { color: var(--text-faint); font-size: 0.85rem; padding: 10px 0; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-glyph">&#128737;</span>
+      <div class="brand-text">
+        <span class="brand-name">SafeShell</span>
+        <span class="brand-sub">AI-Powered Transactional Linux Command Safety Framework</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="protected-pill" class="status-pill ok"><span class="dot"></span> SYSTEM PROTECTED</span>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- ============ Command Console ============ -->
+    <section class="card span-8">
+      <div class="card-head"><h2>Command Console</h2><span class="muted-chip">Analyze &rarr; Simulate &rarr; Review &rarr; Execute &rarr; Verify &rarr; Rollback</span></div>
+      <div class="console-label">What do you want to do on Linux?</div>
+      <div class="console-row">
+        <input id="cmd-input" type="text" placeholder="&gt; Restart nginx" />
+        <button class="btn primary" id="analyze-btn">Analyze Command</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn demo-cta" id="run-demo-btn" style="flex:1;">&#9654; RUN SAFE DEMO</button>
+      </div>
+    </section>
+
+    <!-- ============ Transaction Timeline ============ -->
+    <section class="card span-4">
+      <div class="card-head"><h2>Transaction Timeline</h2><span id="txn-id-chip" class="muted-chip">no active transaction</span></div>
+      <div class="pipeline" id="pipeline"></div>
+    </section>
+
+    <!-- ============ Risk Analysis ============ -->
+    <section class="card span-4">
+      <div class="card-head"><h2>Command Risk Analysis</h2></div>
+      <div id="risk-panel">
+        <div class="empty-note">Analyze a command to see its risk profile.</div>
+      </div>
+    </section>
+
+    <!-- ============ AI Security Analysis ============ -->
+    <section class="card span-4">
+      <div class="card-head"><h2>AI Security Analysis</h2></div>
+      <div id="ai-panel">
+        <div class="empty-note">AI reasoning will appear here after analysis.</div>
+      </div>
+    </section>
+
+    <!-- ============ Simulation ============ -->
+    <section class="card span-4">
+      <div class="card-head"><h2>Pre-Execution Simulation</h2></div>
+      <div id="sim-panel">
+        <div class="empty-note">Run a simulation to preview impact before anything executes.</div>
+      </div>
+    </section>
+
+    <!-- ============ Undo / Rollback ============ -->
+    <section class="card span-6">
+      <div class="card-head"><h2>AI-Generated Undo Plan</h2></div>
+      <div id="undo-panel">
+        <div class="empty-note">An undo plan is generated automatically during simulation.</div>
+      </div>
+    </section>
+
+    <!-- ============ Confirmation / Execution ============ -->
+    <section class="card span-6">
+      <div class="card-head"><h2>Transaction Preview &amp; Confirmation</h2></div>
+      <div id="confirm-panel">
+        <div class="empty-note">Simulate a command to review its transaction preview here.</div>
+      </div>
+      <div class="btn-row" id="action-row"></div>
+    </section>
+
+    <!-- ============ Security Status ============ -->
+    <section class="card span-12">
+      <div class="card-head"><h2>Security Status</h2><span id="status-refresh-chip" class="muted-chip">live</span></div>
+      <div class="stat-grid" id="status-grid"></div>
+    </section>
+
+    <!-- ============ Transaction History ============ -->
+    <section class="card span-12">
+      <div class="card-head">
+        <h2>Transaction History</h2>
+        <div class="filter-bar">
+          <span id="filter-chip" class="muted-chip filter-chip hidden"></span>
+          <button id="clear-filter-btn" class="btn ghost clear-filter-btn hidden" type="button">Clear Filter</button>
+          <span class="muted-chip">audit trail</span>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="txn-table">
+          <thead>
+            <tr><th>Transaction</th><th>Command</th><th>Risk</th><th>Status</th><th>Rollback</th></tr>
+          </thead>
+          <tbody id="txn-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <footer class="app-footer">
+    <span>SafeShell — Trusted Computing &amp; Embedded Security Track · Transactional Command Execution Prototype</span>
+    <span id="engine-mode-note">Engine: connecting…</span>
+  </footer>
+</div>
+
+<script>
+/* =========================================================================
+   SafeShell frontend
+   Talks to the backend's /api/safeshell/* endpoints (see
+   backend/app/routes/safeshell.py + backend/app/services/safeshell_engine.py).
+   If the backend is unreachable, falls back to an identical, fully
+   deterministic in-browser copy of the same scenario/transaction engine so
+   the demo can still be recorded end to end.
+   ========================================================================= */
+
+const API_BASE = (() => {
+  // Allow overriding the API base via ?api=http://host:port for demo flexibility.
+  const params = new URLSearchParams(window.location.search);
+  return params.get('api') || 'http://localhost:8000';
+})();
+
+let ENGINE_MODE = 'connecting'; // 'live' | 'offline'
+
+// ---------------------------------------------------------------------
+// Deterministic offline fallback engine (mirrors backend safeshell_engine.py)
+// ---------------------------------------------------------------------
+const OFFLINE_SCENARIOS = {
+  dangerous_delete: {
+    id: 'dangerous_delete', title: 'Dangerous File Deletion', user_input: 'Delete all temporary files',
+    command: 'rm -rf /tmp/*', risk_level: 'high', privilege: 'root',
+    intent: 'Bulk-delete files under /tmp to free up disk space.',
+    ai_reasoning: 'Recursive, forced deletion of an entire directory tree. This pattern is indistinguishable from an accidental wildcard deletion and cannot be undone without a prior snapshot.',
+    confidence: 0.93, before_state: '/tmp contains 247 files across 18 subdirectories.',
+    affected_resources: ['/tmp/* (247 files)'],
+    simulation: { files_affected: 247, services_affected: 0, config_changes: 0, estimated_impact: 'HIGH', notes: 'Recursive file deletion. Multiple files affected. Potential data loss.' },
+    undo_plan: ['Create a pre-execution snapshot of /tmp before anything is deleted', 'Restore deleted files from the transaction snapshot', 'Verify restored file count matches the snapshot', 'Verify system state'],
+    recommended_action: 'BLOCK / REQUIRE CONFIRMATION', blocked: true,
+    block_reason: 'Recursive, forced deletion of a whole directory tree - classified HIGH risk.', category: 'filesystem',
+  },
+  service_restart: {
+    id: 'service_restart', title: 'Service Restart', user_input: 'Restart nginx',
+    command: 'systemctl restart nginx', risk_level: 'medium', privilege: 'root',
+    intent: 'Restart the nginx web server to apply configuration or recover from a hang.',
+    ai_reasoning: 'Service restart can temporarily interrupt availability, but nginx is a stateless, well-behaved systemd unit with a clean stop/start path.',
+    confidence: 0.96, before_state: 'nginx: active (running), 3 worker processes, listening on :80/:443',
+    affected_resources: ['nginx.service'],
+    simulation: { files_affected: 0, services_affected: 1, config_changes: 0, estimated_impact: 'MEDIUM', notes: 'Temporary service interruption during restart (typically < 1s).' },
+    undo_plan: ['If the service fails to come back up, run: systemctl start nginx', 'Verify nginx: active (running)', 'Verify port 80/443 are listening again'],
+    recommended_action: 'Safe to execute after confirmation', blocked: false, category: 'service',
+  },
+  permission_change: {
+    id: 'permission_change', title: 'Permission Change', user_input: 'Make this script executable',
+    command: 'chmod +x /opt/app/script.sh', risk_level: 'low', privilege: 'user',
+    intent: 'Grant execute permission on a single, known script file.',
+    ai_reasoning: 'Single-file, non-recursive permission change. No wildcard, no recursion - low blast radius.',
+    confidence: 0.99, before_state: '-rw-r--r--  1 app  app  1.2K  /opt/app/script.sh',
+    affected_resources: ['/opt/app/script.sh'],
+    simulation: { files_affected: 1, services_affected: 0, config_changes: 0, estimated_impact: 'LOW', notes: 'Permission bits changed on a single file. Fully reversible.' },
+    undo_plan: ['Run: chmod -x /opt/app/script.sh', 'Verify permissions return to -rw-r--r--'],
+    recommended_action: 'Low-risk operation', blocked: false, category: 'permissions',
+  },
+  config_update: {
+    id: 'config_update', title: 'Configuration Modification', user_input: 'Update the application configuration',
+    command: 'nano /etc/safeshell/app.conf', risk_level: 'medium', privilege: 'root',
+    intent: "Edit the application's configuration file.",
+    ai_reasoning: 'Direct edits to a live configuration file can change application behavior. A snapshot before editing makes this fully reversible.',
+    confidence: 0.9, before_state: '/etc/safeshell/app.conf last modified 14 days ago, 42 lines',
+    affected_resources: ['/etc/safeshell/app.conf'],
+    simulation: { files_affected: 1, services_affected: 0, config_changes: 1, estimated_impact: 'MEDIUM', notes: '1 configuration file modified. Snapshot created before edit.' },
+    undo_plan: ['Snapshot created before edit: app.conf.bak.20260825', 'Restore previous configuration from snapshot', 'Reload the service that consumes this config, if required', 'Verify configuration diff is empty after restore'],
+    recommended_action: 'Rollback available', blocked: false, category: 'configuration',
+  },
+  package_install: {
+    id: 'package_install', title: 'Package Installation', user_input: 'Install nginx',
+    command: 'apt install nginx', risk_level: 'medium', privilege: 'root',
+    intent: 'Install the nginx package and its dependencies.',
+    ai_reasoning: 'Package installation adds new files, a new systemd unit, and default configuration files, all tracked by the package manager and cleanly removable.',
+    confidence: 0.94, before_state: 'nginx package: not installed',
+    affected_resources: ['nginx (package)', 'nginx.service', '/etc/nginx/*'],
+    simulation: { files_affected: 0, services_affected: 1, config_changes: 3, estimated_impact: 'MEDIUM', notes: 'Packages installed: 1. Services affected: 1. Configuration files: 3.' },
+    undo_plan: ['Remove installed package: apt remove nginx', 'Restore modified configuration (if any pre-existing files were overwritten)', 'Verify nginx.service is no longer present'],
+    recommended_action: 'Transaction ready', blocked: false, category: 'package',
+  },
+  privilege_escalation: {
+    id: 'privilege_escalation', title: 'Dangerous Privilege Escalation', user_input: 'Give everyone full access to the filesystem',
+    command: 'chmod -R 777 /', risk_level: 'critical', privilege: 'root',
+    intent: 'Recursively grant read/write/execute to all users across the entire filesystem.',
+    ai_reasoning: 'Recursive permission change targeting the filesystem root. This would strip access control system-wide and very likely render the system unusable.',
+    confidence: 0.99, before_state: 'Standard filesystem permissions (root-owned system paths, default ACLs).',
+    affected_resources: ['/ (entire filesystem)'],
+    simulation: { files_affected: null, services_affected: null, config_changes: null, estimated_impact: 'CRITICAL', notes: 'Potential system-wide permission modification. Simulation halted before enumeration.' },
+    undo_plan: [], recommended_action: 'EXECUTION BLOCKED', blocked: true,
+    block_reason: 'Unsafe system-wide permission modification detected.', category: 'filesystem',
+  },
+  successful_transaction: {
+    id: 'successful_transaction', title: 'Successful Transaction', user_input: 'Clean up rotated log files older than 30 days',
+    command: "find /var/log/app -name '*.log.gz' -mtime +30 -delete", risk_level: 'low', privilege: 'root',
+    intent: 'Remove already-rotated, compressed log archives past their retention window.',
+    ai_reasoning: 'Scoped to a specific directory, file suffix, and age threshold - not a broad wildcard delete. Low operational risk.',
+    confidence: 0.97, before_state: '/var/log/app contains 3 rotated archives older than 30 days (log.gz)',
+    affected_resources: ['/var/log/app/*.log.gz (3 files)'],
+    simulation: { files_affected: 3, services_affected: 0, config_changes: 0, estimated_impact: 'LOW', notes: '3 files affected, all already-rotated archives. Fully reversible from snapshot.' },
+    undo_plan: ['Snapshot created before deletion', 'Restore the 3 archives from the transaction snapshot if needed', 'Verify directory listing matches pre-transaction state'],
+    recommended_action: 'Safe to execute after confirmation', blocked: false, category: 'filesystem',
+  },
+};
+const SCENARIO_ORDER = ['dangerous_delete','service_restart','permission_change','config_update','package_install','privilege_escalation','successful_transaction'];
+const STAGE_SEQ = ['command_received','intent_analyzed','risk_assessed','impact_simulated','undo_plan_generated','awaiting_confirmation','execute','verify','commit_or_rollback'];
+
+let _offlineCounter = 9; // seeded 001-008 already "exist" conceptually; new ones start at 009
+const OFFLINE_TXNS = {
+  'TXN-2026-001': { transaction_id:'TXN-2026-001', command:'systemctl restart nginx', scenario_id:'service_restart', risk_level:'medium', status:'COMMITTED', rollback_status:'Available', changes:1, stages_completed:[...STAGE_SEQ] },
+  'TXN-2026-002': { transaction_id:'TXN-2026-002', command:'rm -rf /tmp/*', scenario_id:'dangerous_delete', risk_level:'high', status:'BLOCKED', rollback_status:'Available', changes:0, stages_completed:[...STAGE_SEQ] },
+  'TXN-2026-003': { transaction_id:'TXN-2026-003', command:'chmod +x /opt/app/script.sh', scenario_id:'permission_change', risk_level:'low', status:'COMMITTED', rollback_status:'Available', changes:1, stages_completed:[...STAGE_SEQ] },
+  'TXN-2026-004': { transaction_id:'TXN-2026-004', command:'nano /etc/safeshell/app.conf', scenario_id:'config_update', risk_level:'medium', status:'ROLLED_BACK', rollback_status:'Completed', changes:1, stages_completed:[...STAGE_SEQ] },
+  'TXN-2026-005': { transaction_id:'TXN-2026-005', command:'apt install nginx', scenario_id:'package_install', risk_level:'medium', status:'COMMITTED', rollback_status:'Available', changes:4, stages_completed:[...STAGE_SEQ] },
+  'TXN-2026-006': { transaction_id:'TXN-2026-006', command:"find /var/log/app -name '*.log.gz' -mtime +30 -delete", scenario_id:'successful_transaction', risk_level:'low', status:'COMMITTED', rollback_status:'Available', changes:3, stages_completed:[...STAGE_SEQ] },
+  'TXN-2026-007': { transaction_id:'TXN-2026-007', command:'chmod -R 777 /', scenario_id:'privilege_escalation', risk_level:'critical', status:'BLOCKED', rollback_status:'Not applicable', changes:0, stages_completed:STAGE_SEQ.slice(0,5) },
+  'TXN-2026-008': { transaction_id:'TXN-2026-008', command:'userdel -r deploy', scenario_id:null, risk_level:'medium', status:'AWAITING_CONFIRMATION', rollback_status:'Available', changes:1, stages_completed:STAGE_SEQ.slice(0,5) },
+};
+
+function matchOfflineScenario(command) {
+  if (!command) return null;
+  const norm = command.trim().toLowerCase();
+  // Match on either the technical shell command OR the natural-language
+  // description (user_input), case-insensitively. Free-typed English
+  // like "Delete all temporary files" must resolve to the same scenario
+  // as the literal command "rm -rf /tmp/*".
+  return Object.values(OFFLINE_SCENARIOS).find(s =>
+    s.command.trim().toLowerCase() === norm || s.user_input.trim().toLowerCase() === norm
+  ) || null;
+}
+
+function offlineAnalyze(scenarioId, command) {
+  if (scenarioId && OFFLINE_SCENARIOS[scenarioId]) return { ...OFFLINE_SCENARIOS[scenarioId] };
+  if (command) {
+    const match = matchOfflineScenario(command);
+    if (match) return { ...match };
+    // generic fallback for freeform text that doesn't match a known scenario
+    const lower = command.toLowerCase();
+    const blocked = /rm\s+-rf\s+\/(\s|\*|$)|mkfs|dd\s+if=|shutdown|reboot|chmod\s+-r\s+777\s+\//.test(lower);
+    const risk = blocked ? 'critical' : (/sudo|rm\s+-r|chmod\s+-r/.test(lower) ? 'medium' : 'low');
+    return {
+      id: null, title: 'Custom Command', user_input: command, command, risk_level: risk,
+      privilege: lower.includes('sudo') ? 'root' : 'user',
+      intent: "Freeform command analyzed by SafeShell's local rule engine.",
+      ai_reasoning: blocked ? 'Matches a known destructive pattern.' : 'No high-risk pattern matched by the local rule set.',
+      confidence: 0.75, before_state: 'Unknown (no snapshot scenario configured for this exact command).',
+      affected_resources: [],
+      simulation: { files_affected: null, services_affected: null, config_changes: null, estimated_impact: risk.toUpperCase(), notes: 'Generic simulation: no predefined scenario data for this exact command.' },
+      undo_plan: blocked ? [] : ['Create a pre-execution snapshot', 'Restore from snapshot if rolled back', 'Verify system state'],
+      recommended_action: blocked ? 'EXECUTION BLOCKED' : (risk === 'high' ? 'BLOCK / REQUIRE CONFIRMATION' : 'Safe to execute after confirmation'),
+      blocked, block_reason: blocked ? 'Matches a known destructive command pattern.' : null, category: 'custom',
+    };
+  }
+  throw new Error('scenario_id or command required');
+}
+
+function offlineSimulate(scenarioId, command) {
+  const scenario = offlineAnalyze(scenarioId, command);
+  const txnId = `TXN-2026-${String(_offlineCounter++).padStart(3,'0')}`;
+  const status = scenario.blocked ? 'BLOCKED' : 'AWAITING_CONFIRMATION';
+  const txn = {
+    transaction_id: txnId, scenario_id: scenario.id, command: scenario.command, user_input: scenario.user_input,
+    risk_level: scenario.risk_level, privilege: scenario.privilege, intent: scenario.intent, ai_reasoning: scenario.ai_reasoning,
+    confidence: scenario.confidence, before_state: scenario.before_state, affected_resources: scenario.affected_resources,
+    simulation: scenario.simulation, undo_plan: scenario.undo_plan, recommended_action: scenario.recommended_action,
+    blocked: scenario.blocked, block_reason: scenario.block_reason || null, status,
+    rollback_status: scenario.undo_plan.length ? 'Available' : 'Not applicable',
+    changes: (scenario.simulation.files_affected||0)+(scenario.simulation.services_affected||0)+(scenario.simulation.config_changes||0),
+    stages_completed: STAGE_SEQ.slice(0,5),
+  };
+  OFFLINE_TXNS[txnId] = txn;
+  return { ...txn };
+}
+
+function offlineExecute(txnId, confirm) {
+  const txn = OFFLINE_TXNS[txnId];
+  if (!txn) throw new Error('not found');
+  if (txn.status === 'BLOCKED') return { ...txn };
+  if (!confirm) { txn.status = 'FAILED'; txn.message = 'Execution was not confirmed by the user.'; return { ...txn }; }
+  txn.status = 'COMMITTED';
+  txn.stages_completed = [...STAGE_SEQ];
+  txn.rollback_status = txn.undo_plan.length ? 'Available' : 'Not applicable';
+  txn.message = 'Transaction executed. Verification successful. Transaction COMMITTED.';
+  return { ...txn };
+}
+
+function offlineRollback(txnId) {
+  const txn = OFFLINE_TXNS[txnId];
+  if (!txn) throw new Error('not found');
+  if (txn.status !== 'COMMITTED') throw new Error('not committed');
+  txn.status = 'ROLLED_BACK';
+  txn.rollback_status = 'Completed';
+  txn.message = 'Previous state restored. Verification successful.';
+  return { ...txn };
+}
+
+function offlineStatus() {
+  const txns = Object.values(OFFLINE_TXNS);
+  // Counts must always equal what the corresponding filter click reveals in
+  // Transaction History, so these are computed straight from the actual
+  // transaction list with no artificial floor.
+  return {
+    system: 'Protected', demo_mode: true,
+    safe_transactions: txns.filter(t=>t.status==='COMMITTED').length,
+    blocked_commands: txns.filter(t=>t.status==='BLOCKED').length,
+    rollback_available: txns.filter(t=>t.rollback_status==='Available').length,
+    active_transactions: txns.filter(t=>['AWAITING_CONFIRMATION','EXECUTING','VERIFYING'].includes(t.status)).length,
+  };
+}
+
+// ---------------------------------------------------------------------
+// API layer: tries the live backend, falls back to the offline engine.
+// ---------------------------------------------------------------------
+async function apiFetch(path, opts, timeoutMs = 2500) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, { ...opts, signal: controller.signal, headers: { 'Content-Type': 'application/json', ...(opts && opts.headers) } });
+    clearTimeout(t);
+    if (!res.ok) { const body = await res.json().catch(()=>({detail: res.statusText})); throw new Error(body.detail || res.statusText); }
+    return await res.json();
+  } catch (e) {
+    clearTimeout(t);
+    throw e;
+  }
+}
+
+async function getScenarios() {
+  try {
+    const r = await apiFetch('/api/safeshell/scenarios', { method: 'GET' });
+    ENGINE_MODE = 'live';
+    return r.scenarios;
+  } catch { ENGINE_MODE = 'offline'; return SCENARIO_ORDER.map(id => { const s = OFFLINE_SCENARIOS[id]; return { id:s.id, title:s.title, user_input:s.user_input, command:s.command, risk_level:s.risk_level, blocked:s.blocked, category:s.category }; }); }
+}
+async function apiAnalyze(scenario_id, command) {
+  try { return await apiFetch('/api/safeshell/analyze', { method:'POST', body: JSON.stringify({ scenario_id, command }) }); }
+  catch { return offlineAnalyze(scenario_id, command); }
+}
+async function apiSimulate(scenario_id, command) {
+  try { return await apiFetch('/api/safeshell/simulate', { method:'POST', body: JSON.stringify({ scenario_id, command }) }); }
+  catch { return offlineSimulate(scenario_id, command); }
+}
+async function apiExecute(transaction_id, confirm) {
+  try { return await apiFetch('/api/safeshell/execute', { method:'POST', body: JSON.stringify({ transaction_id, confirm }) }); }
+  catch { return offlineExecute(transaction_id, confirm); }
+}
+async function apiRollback(transaction_id) {
+  try { return await apiFetch('/api/safeshell/rollback', { method:'POST', body: JSON.stringify({ transaction_id }) }); }
+  catch { return offlineRollback(transaction_id); }
+}
+function txnSeq(id) {
+  const m = /(\d+)\s*$/.exec(String(id || ''));
+  return m ? parseInt(m[1], 10) : null;
+}
+function sortNewestFirst(txns) {
+  const arr = [...txns];
+  // Prefer sorting by the numeric transaction sequence (works for both the
+  // offline engine's TXN-2026-### ids and any similarly-formatted backend
+  // ids). If ids aren't numeric-suffixed, fall back to reversing the
+  // array, assuming the source returned oldest-first.
+  if (arr.every(t => txnSeq(t.transaction_id) !== null)) {
+    arr.sort((a, b) => txnSeq(b.transaction_id) - txnSeq(a.transaction_id));
+  } else {
+    arr.reverse();
+  }
+  return arr;
+}
+async function apiTransactions() {
+  try { const r = await apiFetch('/api/safeshell/transactions', { method:'GET' }); return sortNewestFirst(r.transactions); }
+  catch { return sortNewestFirst(Object.values(OFFLINE_TXNS)); }
+}
+async function apiStatus() {
+  try { return await apiFetch('/api/safeshell/status', { method:'GET' }); }
+  catch { return offlineStatus(); }
+}
+
+// ---------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------
+const el = id => document.getElementById(id);
+let currentTxn = null;
+let currentScenarioId = null;
+
+function riskClass(risk) {
+  if (!risk) return 'safe';
+  const r = risk.toLowerCase();
+  if (r === 'blocked') return 'critical';
+  return r;
+}
+
+function highlightScenario(id) {
+  document.querySelectorAll('.scenario-chip').forEach(c => c.classList.toggle('active', c.dataset.id === id));
+}
+
+function renderPipeline(stagesCompleted, blocked) {
+  const labels = [
+    ['command_received', 'Command Received'],
+    ['intent_analyzed', 'Intent Analyzed'],
+    ['risk_assessed', 'Risk Assessed'],
+    ['impact_simulated', 'Impact Simulated'],
+    ['undo_plan_generated', 'Undo Plan Generated'],
+    ['awaiting_confirmation', 'Awaiting Confirmation'],
+    ['execute', 'Execute'],
+    ['verify', 'Verify'],
+    ['commit_or_rollback', 'Commit / Rollback'],
+  ];
+  const done = new Set(stagesCompleted || []);
+  const container = el('pipeline');
+  container.innerHTML = '';
+  labels.forEach(([key, label], i) => {
+    const isDone = done.has(key);
+    const isNext = !isDone && (i === 0 || done.has(labels[i-1][0]));
+    const wrap = document.createElement('div');
+    let cls = 'pipeline-stage';
+    if (blocked && key === 'awaiting_confirmation' && !done.has('execute')) cls += ' blocked';
+    else if (isDone) cls += ' done';
+    else if (isNext) cls += ' current';
+    wrap.className = cls;
+    wrap.innerHTML = `<span class="marker">${isDone ? '&#10003;' : (blocked && cls.includes('blocked') ? '&#10005;' : (isNext ? '&#9679;' : '&#9675;'))}</span><span class="label">${label}</span>`;
+    container.appendChild(wrap);
+    if (i < labels.length - 1) {
+      const conn = document.createElement('div');
+      conn.className = 'pipeline-connector' + (isDone ? ' done' : '');
+      container.appendChild(conn);
+    }
+  });
+}
+
+function renderRiskPanel(data) {
+  const risk = (data.risk_level || 'safe').toUpperCase();
+  el('risk-panel').innerHTML = `
+    <div class="big-risk ${riskClass(data.risk_level)}">${data.blocked ? 'BLOCKED' : risk}</div>
+    <div class="reason-box">${data.ai_reasoning || ''}</div>
+    <div class="kv-row"><span class="k">Privilege</span><span class="v">${(data.privilege||'user').toUpperCase()}</span></div>
+    <div class="kv-row"><span class="k">Affected Resources</span><span class="v">${(data.affected_resources && data.affected_resources.length) ? data.affected_resources.join(', ') : '—'}</span></div>
+    <div class="kv-row"><span class="k">System Impact</span><span class="v">${data.simulation ? data.simulation.estimated_impact : risk}</span></div>
+    ${data.blocked ? `<div class="banner blocked">&#9888; ${data.block_reason || 'This command was blocked by SafeShell.'}</div>` : ''}
+  `;
+}
+
+function renderAiPanel(data) {
+  el('ai-panel').innerHTML = `
+    <div class="kv-row"><span class="k">Intent</span><span class="v">${data.intent || '—'}</span></div>
+    <div class="reason-box"><strong>Risk reasoning:</strong> ${data.ai_reasoning || '—'}</div>
+    <div class="kv-row" style="margin-top:8px;"><span class="k">Recommended action</span><span class="v">${data.recommended_action || '—'}</span></div>
+    <div class="kv-row"><span class="k">Confidence</span><span class="v ai-conf">${Math.round((data.confidence||0)*100)}%</span></div>
+  `;
+}
+
+function renderSimPanel(data) {
+  const s = data.simulation || {};
+  const fmt = v => (v === null || v === undefined) ? '—' : v;
+  el('sim-panel').innerHTML = `
+    <div class="sim-metric-grid">
+      <div class="sim-metric"><div class="num">${fmt(s.files_affected)}</div><div class="lbl">Files affected</div></div>
+      <div class="sim-metric"><div class="num">${fmt(s.services_affected)}</div><div class="lbl">Services affected</div></div>
+      <div class="sim-metric"><div class="num">${fmt(s.config_changes)}</div><div class="lbl">Config changes</div></div>
+      <div class="sim-metric"><div class="num">${fmt(s.estimated_impact)}</div><div class="lbl">Estimated impact</div></div>
+    </div>
+    <div class="check-line"><span class="tick">&#10003;</span> Simulation completed</div>
+    <div class="check-line"><span class="tick">&#10003;</span> No changes made to system</div>
+    ${s.notes ? `<div class="reason-box">${s.notes}</div>` : ''}
+  `;
+}
+
+function renderUndoPanel(data) {
+  const steps = data.undo_plan || [];
+  const readiness = data.blocked ? 0 : (steps.length ? 100 : 0);
+  if (!steps.length) {
+    el('undo-panel').innerHTML = `<div class="banner info">No undo plan applicable — this transaction ${data.blocked ? 'was blocked before any change was made.' : 'made no reversible changes.'}</div>`;
+    return;
+  }
+  el('undo-panel').innerHTML = `
+    <ol class="undo-list">${steps.map((s,i)=>`<li><span class="step-num">${i+1}.</span><span>${s}</span></li>`).join('')}</ol>
+    <div class="readiness-bar-wrap">
+      <div class="readiness-label"><span>Rollback readiness</span><span>${readiness}%</span></div>
+      <div class="readiness-bar"><div class="readiness-fill" style="width:${readiness}%;"></div></div>
+    </div>
+  `;
+}
+
+function renderConfirmPanel(txn) {
+  const actionRow = el('action-row');
+  actionRow.innerHTML = '';
+  if (!txn) { el('confirm-panel').innerHTML = '<div class="empty-note">Simulate a command to review its transaction preview here.</div>'; return; }
+
+  el('txn-id-chip').textContent = txn.transaction_id;
+
+  if (txn.status === 'BLOCKED') {
+    el('confirm-panel').innerHTML = `
+      <div class="kv-row"><span class="k">Transaction</span><span class="v">${txn.transaction_id}</span></div>
+      <div class="kv-row"><span class="k">Command</span><span class="v"><code>${txn.command}</code></span></div>
+      <div class="kv-row"><span class="k">Risk</span><span class="v">${(txn.risk_level||'').toUpperCase()}</span></div>
+      <div class="banner blocked">&#10006; EXECUTION BLOCKED — ${txn.block_reason || 'Unsafe operation detected.'}</div>
+    `;
+    return;
+  }
+
+  if (txn.status === 'AWAITING_CONFIRMATION') {
+    el('confirm-panel').innerHTML = `
+      <div class="kv-row"><span class="k">Transaction</span><span class="v">${txn.transaction_id}</span></div>
+      <div class="kv-row"><span class="k">Command</span><span class="v"><code>${txn.command}</code></span></div>
+      <div class="kv-row"><span class="k">Risk</span><span class="v">${(txn.risk_level||'').toUpperCase()}</span></div>
+      <div class="kv-row"><span class="k">Rollback</span><span class="v">${txn.rollback_status}</span></div>
+      <div class="banner info">Awaiting your confirmation before this executes.</div>
+    `;
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'btn primary';
+    confirmBtn.textContent = 'Confirm & Execute';
+    confirmBtn.onclick = () => handleExecute(txn.transaction_id, true);
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn ghost';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => handleExecute(txn.transaction_id, false);
+    actionRow.appendChild(confirmBtn);
+    actionRow.appendChild(cancelBtn);
+    return;
+  }
+
+  if (txn.status === 'COMMITTED') {
+    el('confirm-panel').innerHTML = `
+      <div class="kv-row"><span class="k">Transaction</span><span class="v">${txn.transaction_id}</span></div>
+      <div class="kv-row"><span class="k">Status</span><span class="v"><span class="status-chip COMMITTED">COMMITTED</span></span></div>
+      <div class="kv-row"><span class="k">Risk</span><span class="v">${(txn.risk_level||'').toUpperCase()}</span></div>
+      <div class="kv-row"><span class="k">Changes</span><span class="v">${txn.changes}</span></div>
+      <div class="kv-row"><span class="k">Rollback</span><span class="v">${txn.rollback_status}</span></div>
+      <div class="banner ok">&#10003; Transaction executed. Verification successful. Transaction COMMITTED.</div>
+    `;
+    if (txn.rollback_status === 'Available') {
+      const rollbackBtn = document.createElement('button');
+      rollbackBtn.className = 'btn warn';
+      rollbackBtn.textContent = 'Rollback Transaction';
+      rollbackBtn.onclick = () => handleRollback(txn.transaction_id);
+      actionRow.appendChild(rollbackBtn);
+    }
+    return;
+  }
+
+  if (txn.status === 'ROLLED_BACK') {
+    el('confirm-panel').innerHTML = `
+      <div class="kv-row"><span class="k">Transaction</span><span class="v">${txn.transaction_id}</span></div>
+      <div class="kv-row"><span class="k">Status</span><span class="v"><span class="status-chip ROLLED_BACK">ROLLED BACK</span></span></div>
+      <div class="banner ok">&#10003; Previous state restored. Verification successful.</div>
+    `;
+    return;
+  }
+
+  if (txn.status === 'FAILED') {
+    el('confirm-panel').innerHTML = `<div class="banner info">Execution was not confirmed. Nothing was run.</div>`;
+    return;
+  }
+}
+
+// Filter definitions for the four Security Status cards. Order matches the
+// card order rendered below.
+const FILTER_DEFS = {
+  SAFE:     { label: 'SAFE TRANSACTIONS',   match: t => t.status === 'COMMITTED' },
+  BLOCKED:  { label: 'BLOCKED COMMANDS',    match: t => t.status === 'BLOCKED' },
+  ROLLBACK: { label: 'ROLLBACK AVAILABLE',  match: t => t.rollback_status === 'Available' },
+  ACTIVE:   { label: 'ACTIVE TRANSACTIONS', match: t => ['AWAITING_CONFIRMATION','EXECUTING','VERIFYING'].includes(t.status) },
+};
+let filterState = null; // one of FILTER_DEFS keys, or null for "all"
+let statsCache = { safe_transactions: 0, blocked_commands: 0, rollback_available: 0, active_transactions: 0 };
+let txnsCache = [];
+
+function toggleFilter(key) {
+  filterState = (filterState === key) ? null : key;
+  paintStatusCards();
+  paintHistory();
+}
+
+async function renderStatus() {
+  statsCache = await apiStatus();
+  paintStatusCards();
+}
+
+function paintStatusCards() {
+  const s = statsCache;
+  const cards = [
+    ['SAFE', s.safe_transactions, 'Safe Transactions'],
+    ['BLOCKED', s.blocked_commands, 'Blocked Commands'],
+    ['ROLLBACK', s.rollback_available, 'Rollback Available'],
+    ['ACTIVE', s.active_transactions, 'Active Transactions'],
+  ];
+  el('status-grid').innerHTML = cards.map(([key, num, lbl]) => `
+    <div class="stat-card${filterState === key ? ' active' : ''}" data-filter="${key}" tabindex="0" role="button" aria-pressed="${filterState === key}">
+      <div class="num">${num}</div>
+      <div class="lbl">${lbl}</div>
+      <div class="stat-hint">${filterState === key ? 'Filtering \u2014 click to clear' : 'Click to filter'}</div>
+    </div>
+  `).join('');
+  el('status-grid').querySelectorAll('.stat-card').forEach(card => {
+    card.addEventListener('click', () => toggleFilter(card.dataset.filter));
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFilter(card.dataset.filter); }
+    });
+  });
+}
+
+async function renderHistory() {
+  txnsCache = await apiTransactions();
+  paintHistory();
+}
+
+function paintHistory() {
+  const sorted = sortNewestFirst(txnsCache);
+  const filtered = filterState ? sorted.filter(FILTER_DEFS[filterState].match) : sorted;
+
+  const chip = el('filter-chip');
+  const clearBtn = el('clear-filter-btn');
+  if (filterState) {
+    chip.textContent = 'FILTER: ' + FILTER_DEFS[filterState].label;
+    chip.classList.remove('hidden');
+    clearBtn.classList.remove('hidden');
+  } else {
+    chip.classList.add('hidden');
+    clearBtn.classList.add('hidden');
+  }
+
+  const tbody = el('txn-table-body');
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-note">No transactions match this filter.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered.map(t => `
+    <tr>
+      <td><code>${t.transaction_id}</code></td>
+      <td><code>${t.command}</code></td>
+      <td><span class="risk-tag ${riskClass(t.risk_level)}">${t.risk_level}</span></td>
+      <td><span class="status-chip ${t.status}">${t.status.replace('_',' ')}</span></td>
+      <td>${t.rollback_status}</td>
+    </tr>
+  `).join('');
+}
+
+function updateModeUi() {
+  const note = el('engine-mode-note');
+  if (ENGINE_MODE === 'offline') {
+    note.textContent = 'Engine: local deterministic fallback (backend unreachable at ' + API_BASE + ')';
+  } else {
+    note.textContent = 'Engine: connected to SafeShell backend at ' + API_BASE;
+  }
+}
+
+// ---------------------------------------------------------------------
+// Workflow handlers
+// ---------------------------------------------------------------------
+async function loadScenario(id) {
+  currentScenarioId = id;
+  highlightScenario(id);
+  const scenario = OFFLINE_SCENARIOS[id] || null;
+  el('cmd-input').value = scenario ? scenario.user_input : '';
+  await runAnalyze(id, null);
+  await runSimulate(id, null);
+}
+
+async function runAnalyze(scenarioId, command) {
+  setButtonsBusy(true);
+  try {
+    const data = await apiAnalyze(scenarioId, command);
+    updateModeUi();
+    renderRiskPanel(data);
+    renderAiPanel(data);
+    renderPipeline(['command_received','intent_analyzed','risk_assessed'], data.blocked);
+    currentTxn = null;
+    el('sim-panel').innerHTML = '<div class="empty-note">Run a simulation to preview impact before anything executes.</div>';
+    el('undo-panel').innerHTML = '<div class="empty-note">An undo plan is generated automatically during simulation.</div>';
+    renderConfirmPanel(null);
+    return data;
+  } finally { setButtonsBusy(false); }
+}
+
+async function runSimulate(scenarioId, command) {
+  setButtonsBusy(true);
+  try {
+    const txn = await apiSimulate(scenarioId, command);
+    updateModeUi();
+    currentTxn = txn;
+    renderRiskPanel(txn);
+    renderAiPanel(txn);
+    renderSimPanel(txn);
+    renderUndoPanel(txn);
+    renderPipeline(txn.stages_completed, txn.blocked);
+    renderConfirmPanel(txn);
+    await renderHistory();
+    await renderStatus();
+    return txn;
+  } finally { setButtonsBusy(false); }
+}
+
+async function handleExecute(txnId, confirm) {
+  setButtonsBusy(true);
+  try {
+    const txn = await apiExecute(txnId, confirm);
+    currentTxn = txn;
+    renderPipeline(txn.stages_completed, txn.blocked);
+    renderConfirmPanel(txn);
+    await renderHistory();
+    await renderStatus();
+  } finally { setButtonsBusy(false); }
+}
+
+async function handleRollback(txnId) {
+  setButtonsBusy(true);
+  try {
+    const txn = await apiRollback(txnId);
+    currentTxn = txn;
+    renderPipeline(txn.stages_completed, txn.blocked);
+    renderConfirmPanel(txn);
+    await renderHistory();
+    await renderStatus();
+  } finally { setButtonsBusy(false); }
+}
+
+function setButtonsBusy(busy) {
+  document.querySelectorAll('.btn').forEach(b => b.disabled = busy);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function runFullDemo() {
+  const demoBtn = el('run-demo-btn');
+  demoBtn.disabled = true;
+  try {
+    // Act 1: dangerous command gets blocked
+    loadScenario('dangerous_delete');
+    await sleep(300);
+    await runAnalyze('dangerous_delete', null);
+    await sleep(900);
+    await runSimulate('dangerous_delete', null);
+    await sleep(1800);
+
+    // Act 2: safe, successful transaction end to end
+    loadScenario('service_restart');
+    await sleep(300);
+    await runAnalyze('service_restart', null);
+    await sleep(900);
+    const txn = await runSimulate('service_restart', null);
+    await sleep(1400);
+    await handleExecute(txn.transaction_id, true);
+    await sleep(1600);
+    await handleRollback(txn.transaction_id);
+  } finally {
+    demoBtn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------
+el('analyze-btn').addEventListener('click', async () => {
+  const cmd = el('cmd-input').value.trim();
+  if (!cmd) return;
+  currentScenarioId = null;
+  highlightScenario(null);
+  const data = await runAnalyze(null, cmd);
+  await runSimulate(null, cmd);
+});
+
+el('cmd-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') el('analyze-btn').click(); });
+el('run-demo-btn').addEventListener('click', runFullDemo);
+el('clear-filter-btn').addEventListener('click', () => toggleFilter(filterState));
+
+(async function init() {
+  await getScenarios();
+  updateModeUi();
+  renderPipeline([], false);
+  await renderStatus();
+  await renderHistory();
+})();
+</script>
+</body>
+</html>
